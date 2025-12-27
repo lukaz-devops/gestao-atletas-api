@@ -1,0 +1,3 @@
+from gestao_atletas_api.categorias.models import CategoriaModel
+from gestao_atletas_api.atleta.models import AtletaModel
+from gestao_atletas_api.centro_treinamento.models import CentroTreinamentoModel

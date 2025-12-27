@@ -1,58 +1,69 @@
-import asyncio
 from logging.config import fileConfig
 
-from sqlalchemy.engine import Connection
-from sqlalchemy.ext.asyncio import async_engine_from_config
-from sqlalchemy import pool
-
+from sqlalchemy import engine_from_config, pool
 from alembic import context
-from workout_api.contrib.models import BaseModel
-from workout_api.contrib.repository.models import *
 
+from gestao_atletas_api.configs.settings import settings
+from gestao_atletas_api.contrib.models import BaseModel
+
+
+# Configuração base do Alembic
 config = context.config
-
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-
+# Metadata usada pelo autogenerate
 target_metadata = BaseModel.metadata
 
 
-def run_migrations_offline() -> None:
-    url = config.get_main_option("sqlalchemy.url")
+# Força Alembic a usar DATABASE_URL_SYNC (psycopg)
+if not settings.DATABASE_URL_SYNC:
+    raise RuntimeError("DATABASE_URL_SYNC nçao foi definida")
+
+config.set_main_option("sqlalchemy.url", settings.DATABASE_URL_SYNC)
+
+
+# Migrations OFFLINE
+def run_migrations_offline():
+    """
+    Executa migrations no modo offline.
+    Não cria conexão com o banco.
+    """
     context.configure(
-        url=url,
+        url=settings.DATABASE_URL_SYNC,
         target_metadata=target_metadata,
         literal_binds=True,
-        dialect_opts={"paramstyle": "named"},
+        compare_type=True,
     )
 
     with context.begin_transaction():
         context.run_migrations()
 
+# Migrations ONLINE
+def run_migrations_online():
+    """
+    Executa migrations no modo online.
+    Usa engine SINCRONO (psycopg2).
+    """
 
-def do_run_migrations(connection: Connection) -> None: 
-    context.configure(connection=connection, target_metadata=target_metadata)
-    
-    with context.begin_transaction():
-        context.run_migrations()
-
-
-async def run_async_migrations() -> None:
-    connectable = async_engine_from_config(
-        config.get_section(config.config_ini_section, {}),
+    connectable = engine_from_config(
+        {"sqlalchemy.url": settings.DATABASE_URL_SYNC},
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
-    async with connectable.connect() as connection:
-        await connection.run_sync(do_run_migrations)
 
+    with connectable.connect() as connection:
+        context.configure(
+            connection=connection,
+            target_metadata=target_metadata,
+            compare_type=True,
+        )
 
-def run_migrations_online() -> None:
-    asyncio.run(run_async_migrations())
+        with context.begin_transaction():
+            context.run_migrations()
 
-
+# Dispatcher
 if context.is_offline_mode():
     run_migrations_offline()
 else:
